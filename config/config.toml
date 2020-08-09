@@ -1,3 +1,6 @@
 [General]
 Address = "localhost:8000"
+ClientsCap = 10
 
+[Logging]
+Type = "debug"
