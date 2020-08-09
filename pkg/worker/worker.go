@@ -2,12 +2,11 @@ package worker
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"time"
 
-	"go.uber.org/zap"
-
-	"github.com/arovesto/game-server/internal/log"
 	"github.com/arovesto/game-server/pkg/stat"
 	"github.com/arovesto/game-server/pkg/world"
 )
@@ -40,8 +39,6 @@ func (w *Worker) Stop() {
 }
 
 func (w *Worker) Start(ctx context.Context, incomming chan net.Conn, done chan struct{}) {
-	message := make([]byte, MessageLength)
-
 	for {
 		if w.curConn == nil {
 			select {
@@ -52,57 +49,69 @@ func (w *Worker) Start(ctx context.Context, incomming chan net.Conn, done chan s
 				w.curConn = c
 			}
 		} else {
-			if err := w.curConn.SetReadDeadline(time.Now().Add(ConnDeadline)); err != nil {
-				log.G(ctx).Debug("error on setting conn deadline. Closing connection...", zap.Error(err))
-				w.curConn = nil
-				_ = w.curConn.Close()
-				continue
-			}
-			cnt, err := w.curConn.Read(message)
-			if err != nil {
-				log.G(ctx).Debug("failed to read from connection. Closing...", zap.Error(err))
-				w.curConn = nil
-				_ = w.curConn.Close()
-				continue
-			}
-
-			if cnt != MessageLength {
-				log.G(ctx).Debug("message length missmatch. Closing connection...")
-				w.curConn = nil
-				_ = w.curConn.Close()
-				continue
-			}
-
-			res := w.Process(ctx, message)
-
-			if err := w.curConn.SetWriteDeadline(time.Now().Add(ConnDeadline)); err != nil {
-				log.G(ctx).Debug("error on setting conn deadline. Closing connection...", zap.Error(err))
-				w.curConn = nil
-				_ = w.curConn.Close()
-				continue
-			}
-
-			cnt, err = w.curConn.Write(res)
-			if err != nil {
-				log.G(ctx).Debug("failed to write to connection. Closing...", zap.Error(err))
-				w.curConn = nil
-				_ = w.curConn.Close()
-				continue
-			}
-
-			if cnt != MessageLength {
-				log.G(ctx).Debug("message length missmatch. Closing connection...")
-				w.curConn = nil
-				_ = w.curConn.Close()
-				continue
+			select {
+			case <-w.stop:
+				done <- struct{}{}
+				return
+			default:
+				w.ProcessConnection(ctx)
 			}
 		}
 	}
 }
 
+func (w *Worker) ProcessConnection(ctx context.Context) {
+	message := make([]byte, MessageLength)
+
+	var err error
+	defer func() {
+		if err != nil {
+			var e net.Error
+			if ok := errors.As(err, &e); ok && e.Timeout() {
+				return
+			}
+			_ = w.curConn.Close()
+			w.curConn = nil
+		}
+	}()
+
+	if err = w.curConn.SetReadDeadline(time.Now().Add(ConnDeadline)); err != nil {
+		err = fmt.Errorf("error on setting conn deadline. Closing connection...: %w", err)
+		return
+	}
+	cnt, err := w.curConn.Read(message)
+	if err != nil {
+		err = fmt.Errorf("failed to read from connection: %w", err)
+		return
+	}
+
+	if cnt != MessageLength {
+		err = fmt.Errorf("message length missmatch: %v not %v", cnt, MessageLength)
+		return
+	}
+
+	res := w.Process(ctx, message)
+
+	if err = w.curConn.SetWriteDeadline(time.Now().Add(ConnDeadline)); err != nil {
+		err = fmt.Errorf("error on setting write conn deadline: %w", err)
+		return
+	}
+
+	cnt, err = w.curConn.Write(res)
+	if err != nil {
+		err = fmt.Errorf("failed to write from connection: %w", err)
+		return
+	}
+
+	if cnt != MessageLength {
+		err = fmt.Errorf("message length missmatch: %v not %v", cnt, MessageLength)
+		return
+	}
+}
+
 func (w *Worker) Process(ctx context.Context, message []byte) []byte {
-	if message[0] > 10 {
-		message[0] = 0
+	if message[0] > '9' {
+		message[0] = '0'
 		return message
 	}
 	w.world.Move(ctx, &world.MoveRequest{Direction: int(message[0])})

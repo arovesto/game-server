@@ -1,0 +1,1 @@
+go run --race main.go --config=../../config/config.toml

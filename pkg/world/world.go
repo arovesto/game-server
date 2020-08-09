@@ -2,8 +2,6 @@ package world
 
 import (
 	"context"
-	"github.com/arovesto/game-server/internal/log"
-	"go.uber.org/zap"
 )
 
 type MoveRequest struct {
@@ -21,6 +19,6 @@ func NewWorld() *World {
 }
 
 func (w *World) Move(ctx context.Context, rq *MoveRequest) *MoveResponce {
-	log.G(ctx).Info("World: move", zap.Int("direction", rq.Direction))
+	//log.G(ctx).Info("World: move", zap.Int("direction", rq.Direction))
 	return nil
 }
