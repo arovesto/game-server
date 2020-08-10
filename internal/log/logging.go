@@ -10,6 +10,7 @@ import (
 
 type logKey struct{}
 
+// TODO support some fast logging type
 func SetupLogger(cfg *config.LoggingConfig) (*zap.Logger, error) {
 	switch cfg.Type {
 	case config.LogDebug:

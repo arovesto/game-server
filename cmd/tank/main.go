@@ -44,14 +44,19 @@ func main() {
 				log.G(ctx).Panic("failed to call address", zap.Error(err))
 			}
 
-			for i := 0; i < 10000; i++ {
-				message := []byte("1111111111111111111111111111111111111111111111111111111111111111")
+			message := make([]byte, worker.MessageLength)
+			for i := range message {
+				message[i] = '1'
+			}
 
+			read := make([]byte, worker.MessageLength)
+
+			for i := 0; i < 10000; i++ {
 				cnt, err := l.Write(message)
 				if err != nil || cnt != worker.MessageLength {
 					log.G(ctx).Panic("error from connection", zap.Error(err), zap.Int("message-lengtth", cnt))
 				}
-				cnt, err = l.Read(message)
+				cnt, err = l.Read(read)
 
 				if err != nil || cnt != worker.MessageLength {
 					log.G(ctx).Panic("error from connection", zap.Error(err), zap.Int("message-lengtth", cnt))

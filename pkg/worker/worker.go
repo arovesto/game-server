@@ -13,7 +13,8 @@ import (
 
 const (
 	ConnDeadline  = 5 * time.Second
-	MessageLength = 64
+	// TODO this should be taked carefull
+	MessageLength = 1024
 )
 
 type Worker struct {
@@ -60,6 +61,7 @@ func (w *Worker) Start(ctx context.Context, incomming chan net.Conn, done chan s
 	}
 }
 
+// TODO support short read message with long write message
 func (w *Worker) ProcessConnection(ctx context.Context) {
 	message := make([]byte, MessageLength)
 

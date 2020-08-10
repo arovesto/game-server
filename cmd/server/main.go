@@ -39,6 +39,8 @@ func main() {
 	if err != nil {
 		log.G(ctx).Panic("failed to create server", zap.Error(err))
 	}
+
+	// TODO should we use UDP instead (or togheher, with udp broadcasting)
 	listener, err := net.Listen("tcp", cfg.General.Address)
 	if err != nil {
 		log.G(ctx).Panic("failed to start listener: %v", zap.Error(err))
