@@ -1,2 +1,5 @@
 .idea
 vendor
+srv
+srv.exe
+static/main.wasm

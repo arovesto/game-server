@@ -1,14 +1,12 @@
 package main
 
 import (
-	"context"
 	"github.com/arovesto/gio"
 	"github.com/arovesto/gio/elements"
 	"github.com/arovesto/gio/input"
 	"github.com/arovesto/gio/math"
 	"log"
 
-	"nhooyr.io/websocket"
 )
 
 type Me struct {
@@ -33,11 +31,6 @@ func (m *Me) Update() error {
 }
 
 func main() {
-	c, _, err := websocket.Dial(context.Background(), "localhost:8080", nil)
-	if err != nil {
-		log.Println(err)
-		return
-	}
 	r := gio.NewCanvas(gio.Config{Server: "localhost:8080", FPSCap: 60})
 	if err := r.LoadTextures([]gio.Texture {
 		{"tank.png", "tmp"},
