@@ -1,6 +1,5 @@
-module github.com/arovesto/game-server
+module github.com/arovesto/gio
 
-go 1.14
+go 1.16
 
-require github.com/pelletier/go-toml v1.8.0
-require go.uber.org/zap latest
+require nhooyr.io/websocket v1.8.6
