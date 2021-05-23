@@ -2,6 +2,7 @@ package math
 
 import (
 	"image"
+	"log"
 	"math"
 )
 
@@ -14,20 +15,37 @@ func (v Vector) ToPoint() image.Point {
 	return image.Point{X: int(v.X), Y: int(v.Y)}
 }
 
-func (v Vector) Add	(other Vector) Vector {
+func (v Vector) Add(other Vector) Vector {
 	return Vector{v.X + other.X, v.Y + other.Y}
 }
 
-func (v Vector) Mul	(c float64) Vector {
+func (v Vector) Mul(c float64) Vector {
 	return Vector{v.X * c, v.Y * c}
 }
 
-func (v Vector) Sub	(other Vector) Vector {
+func (v Vector) Sub(other Vector) Vector {
 	return Vector{v.X - other.X, v.Y - other.Y}
 }
 
 func (v Vector) Abs() float64 {
 	return math.Abs(v.X) + math.Abs(v.Y)
+}
+
+func (v Vector) SquaredL() float64 {
+	return v.X*v.X + v.Y*v.Y
+}
+
+func (v Vector) NormalizedTimes(c float64) Vector {
+	return v.Mul(c / v.Len())
+}
+
+func (v Vector) Len() float64 {
+	return math.Sqrt(v.X*v.X + v.Y*v.Y)
+}
+
+func SquaredEuclideanDistance(a, b Vector) float64 {
+	s := a.Sub(b)
+	return s.X*s.X + s.Y*s.Y
 }
 
 type Box struct {
@@ -40,20 +58,45 @@ func (b Box) ToImageRect() image.Rectangle {
 	return image.Rect(int(b.Corner.X), int(b.Corner.Y), int(second.X), int(second.Y))
 }
 
+func (b Box) Center() Vector {
+	return b.Corner.Add(b.Size.Mul(0.5))
+}
+
+func ClampF(val, min, max float64) float64 {
+	if val < min {
+		return min
+	}
+	if val > max {
+		return max
+	}
+	return val
+}
+
+func Clamp(val, min, max Vector) Vector {
+	return Vector{X: ClampF(val.X, min.X, max.X), Y: ClampF(val.Y, min.Y, max.Y)}
+}
+
 type Sphere struct {
 	Center Vector
 	R      float64
 }
 
+func (s Sphere) IsInside(v Vector) bool {
+	return v.Sub(s.Center).SquaredL() < s.R*s.R
+}
+
 type BackOff struct {
-	Delta      Vector
+	Delta Vector
+	// TODO introduce ContactPoint Vector point or smth instead of this
 	TouchLeft  bool
 	TouchRight bool
 	TouchUp    bool
 	TouchDown  bool
+
+	Collided bool
 }
 
-type Shape interface {}
+type Shape interface{}
 
 func BoxCollide(a, b Box) bool {
 	aTop, aBottom, aLeft, aRight := a.Corner.Y, a.Corner.Y+a.Size.Y, a.Corner.X, a.Corner.X+a.Size.X
@@ -61,23 +104,90 @@ func BoxCollide(a, b Box) bool {
 	return aBottom >= bTop && aTop <= bBottom && aRight >= bLeft && aLeft <= bRight
 }
 
+func BoxSphereCollide(a Box, b Sphere) bool {
+	return Clamp(b.Center, a.Corner, a.Corner.Add(a.Size)).Sub(b.Center).SquaredL() < b.R*b.R
+}
+
+func SphereCollide(a, b Sphere) bool {
+	return SquaredEuclideanDistance(a.Center, b.Center) < (a.R+b.R)*(a.R+b.R)
+}
+
+// TODO implement BackOff vector for Sphere - Box and Sphere- Sphere, now it is none
+// TODO For Sphere - Sphere backoff is always along the center-center line, so 2 basic variants
 func Collide(a, b Shape) (r BackOff) {
-	// assume every shape is a box for now
-	aBox, bBox := a.(Box), b.(Box)
-	if BoxCollide(aBox, bBox) {
-		actions := []BackOff{
-			{TouchDown: true, Delta: Vector{Y: bBox.Corner.Y - aBox.Corner.Y - aBox.Size.Y}},
-			{TouchUp: true, Delta: Vector{Y: bBox.Corner.Y + bBox.Size.Y - aBox.Corner.Y}},
-			{TouchLeft: true, Delta: Vector{X: bBox.Corner.X + bBox.Size.X - aBox.Corner.X}},
-			{TouchRight: true, Delta: Vector{X: bBox.Corner.X - aBox.Corner.X - aBox.Size.X}},
-		}
-		r = actions[0]
-		for _, a := range actions {
-			if a.Delta.Abs() < r.Delta.Abs() {
-				r = a
+	var actions []BackOff
+	switch aVal := a.(type) {
+	case Box:
+		switch bVal := b.(type) {
+		case Box:
+			if BoxCollide(aVal, bVal) {
+				actions = []BackOff{
+					{TouchDown: true, Delta: Vector{Y: bVal.Corner.Y - aVal.Corner.Y - aVal.Size.Y}},
+					{TouchUp: true, Delta: Vector{Y: bVal.Corner.Y + bVal.Size.Y - aVal.Corner.Y}},
+					{TouchLeft: true, Delta: Vector{X: bVal.Corner.X + bVal.Size.X - aVal.Corner.X}},
+					{TouchRight: true, Delta: Vector{X: bVal.Corner.X - aVal.Corner.X - aVal.Size.X}},
+				}
 			}
+		case Sphere:
+			if BoxSphereCollide(aVal, bVal) {
+				return BackOff{Collided: true} // TODO to implement true "Contact" point (more at BackOff)
+			}
+		default:
+			log.Panicln("unknown second val", bVal)
+		}
+	case Sphere:
+		switch bVal := b.(type) {
+		case Box:
+			if BoxSphereCollide(bVal, aVal) {
+				return BackOff{Collided: true} // TODO to implement true "Contact" point (more at BackOff)
+			}
+		case Sphere:
+			if SphereCollide(aVal, bVal) {
+				return BackOff{Collided: true} // TODO to implement true "Contact" point (more at BackOff)
+			}
+		case []Sphere:
+			for _, b := range bVal {
+				if SphereCollide(aVal, b) {
+					return BackOff{Collided: true}
+				}
+			}
+		default:
+			log.Panicln("unknown second val", bVal)
+		}
+	case []Sphere:
+		switch bVal := b.(type) {
+		case []Sphere:
+			for _, a := range aVal {
+				for _, b := range bVal {
+					if SphereCollide(a, b) {
+						return BackOff{Collided: true}
+					}
+				}
+			}
+		case Sphere:
+			for _, a := range aVal {
+				if SphereCollide(a, bVal) {
+					return BackOff{Collided: true}
+				}
+			}
+		default:
+			log.Panicln("unknown second val", bVal)
+		}
+	default:
+		log.Panicln("unknown val", aVal)
+	}
+	if len(actions) == 0 {
+		return
+	}
+	r = actions[0]
+	for _, a := range actions {
+		if a.Delta.Abs() < r.Delta.Abs() {
+			r = a
 		}
 	}
+
+	// assume every shape is a box for now
+
 	return
 }
 

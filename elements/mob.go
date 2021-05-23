@@ -1,13 +1,17 @@
 package elements
 
 import (
-	"github.com/arovesto/gio"
+	"encoding/json"
+	"time"
+
+	"github.com/arovesto/gio/canvas"
 	"github.com/arovesto/gio/math"
 )
 
 // simple, mob
-// use gio.GenElements["mob"] = func()Element{return &Mob{}} to enable
+// use gio.GenElements[0] = func()Element{return &Mob{}} to enable
 type Mob struct {
+	ID        int
 	Where     math.Box
 	Spd       math.Vector
 	Acc       math.Vector
@@ -15,11 +19,19 @@ type Mob struct {
 	Grounded  bool
 }
 
-func (s *Mob) Draw(c *gio.Canvas) {
+func (s *Mob) GetState() ([]byte, error) {
+	return json.Marshal(s)
+}
+
+func (s *Mob) SetState(bytes []byte) error {
+	return json.Unmarshal(bytes, s)
+}
+
+func (s *Mob) Draw(c canvas.Canvas) {
 	c.DrawShape(s.TextureID, s.Where, math.Box{Size: s.Where.Size})
 }
 
-func (s *Mob) Update() error {
+func (s *Mob) Move(duration time.Duration, processor EventProcessor) error {
 	s.Spd = s.Spd.Add(s.Acc)
 	s.Where.Corner = s.Where.Corner.Add(s.Spd)
 	if !s.Grounded {
@@ -29,7 +41,7 @@ func (s *Mob) Update() error {
 	return nil
 }
 
-func (s *Mob) Collide(other gio.Element) error {
+func (s *Mob) Collide(other Collidable) error {
 	info := math.Collide(s.Where, other.Collider())
 	s.Where.Corner = s.Where.Corner.Add(info.Delta)
 	s.Grounded = info.TouchDown
@@ -40,4 +52,12 @@ func (s *Mob) Collide(other gio.Element) error {
 
 func (s *Mob) Collider() math.Shape {
 	return s.Where
+}
+
+func (s *Mob) GetID() int {
+	return s.ID
+}
+
+func (s *Mob) GetType() int {
+	return MobType
 }

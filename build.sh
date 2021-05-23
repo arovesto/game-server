@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -eux
+
 (
 	cd demo/client
 	GOOS=js	GOARCH=wasm go build -o ../../static/main.wasm main.go
