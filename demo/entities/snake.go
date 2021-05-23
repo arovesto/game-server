@@ -28,6 +28,7 @@ type Snake struct {
 	Dead bool
 
 	I           PlayerInput
+	Lost        bool
 	LastCreated time.Time
 }
 
@@ -84,7 +85,8 @@ func (s *Snake) Collider() math.Shape {
 func (s *Snake) Move(duration time.Duration, processor elements.EventProcessor) error {
 	playerOrb := s.Orbs[0]
 
-	if s.Dead {
+	if s.Dead && !s.Lost {
+		s.Lost = true
 		return processor.ProcessEvent(event.Event{Type: "lose", From: s.GetID()})
 	}
 	if s.I.GenNew && time.Since(s.LastCreated) > time.Second {
