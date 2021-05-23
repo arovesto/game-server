@@ -7,6 +7,6 @@
 
 Простая сборка и запуск:
 ```
-go run cmd/test/main.go --config=config/config.toml
+./build run
 ```
 
