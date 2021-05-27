@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/draw"
 	"image/png"
 	_ "image/png"
 	"log"
+	math2 "math"
 	"net/http"
 	"syscall/js"
 	"time"
@@ -24,18 +24,15 @@ type WebCanvas struct {
 	Body     js.Value
 	Canvas   js.Value
 
-	ImgCtx  js.Value
-	ImgData js.Value
-	ImgID   js.Value
-	ImgBuff js.Value
-
-	Frame *image.RGBA
+	ImgCtx js.Value
 
 	Screen math.Box
 
 	cfg gio.Config
 
 	Images map[string]image.Image
+
+	jsImages map[string]js.Value
 
 	grace chan struct{}
 
@@ -44,11 +41,12 @@ type WebCanvas struct {
 
 func NewCanvas(cfg gio.Config) *WebCanvas {
 	c := WebCanvas{
-		Window: js.Global(),
-		cfg:    cfg,
-		Images: map[string]image.Image{},
-		grace:  make(chan struct{}),
-		fps:    1000 / float64(cfg.FPSCap),
+		Window:   js.Global(),
+		cfg:      cfg,
+		Images:   map[string]image.Image{},
+		jsImages: map[string]js.Value{},
+		grace:    make(chan struct{}),
+		fps:      1000 / float64(cfg.FPSCap),
 	}
 	c.Document = c.Window.Get("document")
 	c.Body = c.Document.Get("body")
@@ -62,20 +60,13 @@ func NewCanvas(cfg gio.Config) *WebCanvas {
 	}
 	c.Body.Call("appendChild", c.Canvas)
 	c.ImgCtx = c.Canvas.Call("getContext", "2d")
-	c.ImgData = c.ImgCtx.Call("createImageData", int(c.Screen.Size.X), int(c.Screen.Size.Y))
-	c.Frame = image.NewRGBA(image.Rect(0, 0, int(c.Screen.Size.X), int(c.Screen.Size.Y)))
-	c.ImgBuff = js.Global().Get("Uint8Array").New(len(c.Frame.Pix))
 	c.Window.Call("addEventListener", "resize", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		log.Println("CALLED", c.Window.Get("innerWidth"), c.Canvas.Get("width"))
 		c.Canvas.Set("height", c.Window.Get("innerHeight"))
 		c.Canvas.Set("width", c.Window.Get("innerWidth"))
 		c.Screen.Size = math.Vector{
 			X: c.Window.Get("innerWidth").Float(),
 			Y: c.Window.Get("innerHeight").Float(),
 		}
-		c.ImgData = c.ImgCtx.Call("createImageData", int(c.Screen.Size.X), int(c.Screen.Size.Y))
-		c.Frame = image.NewRGBA(image.Rect(0, 0, int(c.Screen.Size.X), int(c.Screen.Size.Y)))
-		c.ImgBuff = js.Global().Get("Uint8Array").New(len(c.Frame.Pix))
 		return nil
 	}))
 	return &c
@@ -100,28 +91,20 @@ func (c *WebCanvas) Start(callback func(c *WebCanvas, duration time.Duration) bo
 				if float64(time.Since(cbkStart).Milliseconds()) > c.fps {
 					log.Println("overload! callback is not keeping up, late on ", float64(time.Since(cbkStart).Milliseconds())-c.fps)
 				}
-				js.CopyBytesToJS(c.ImgBuff, c.Frame.Pix)
-				c.ImgData.Get("data").Call("set", c.ImgBuff)
-				c.ImgCtx.Call("putImageData", c.ImgData, 0, 0)
 				last = now
 			}
-
 			js.Global().Call("requestAnimationFrame", f)
 			return nil
 		})
+		js.Global().Call("requestAnimationFrame", f)
 		defer f.Release()
-		c.ImgID = js.Global().Call("requestAnimationFrame", f)
 		<-c.grace
 	}()
 	<-c.grace
 }
 
-func (c *WebCanvas) Stop() {
-	c.Window.Call("cancelAnimationFrame", c.ImgID)
-}
-
 func (c *WebCanvas) Clear() {
-	draw.Draw(c.Frame, c.Frame.Rect, image.NewUniform(image.White), image.Point{}, draw.Over)
+	c.ImgCtx.Call("clearRect", 0, 0, c.Screen.Size.X, c.Screen.Size.Y)
 }
 
 type Texture struct {
@@ -129,53 +112,40 @@ type Texture struct {
 	ID   string
 }
 
-func (c *WebCanvas) DrawShape(id string, world, texture math.Shape) {
-	if _, ok := c.Images[id]; !ok {
-		c.Images[id] = nil
-		http.DefaultClient.Timeout = time.Second * 2
-		go func() {
-			defer func() {
-				if c.Images[id] == nil {
-					delete(c.Images, id)
-				}
-			}()
-			url := fmt.Sprintf("%s/%s", c.cfg.Server, id)
-			rp, err := http.Get(url)
+func (c *WebCanvas) DrawText(text string, where math.Vector, font string) {
+	if font != "" {
+		c.ImgCtx.Set("font", font)
+	}
+	c.ImgCtx.Call("fillText", text, where.X, where.Y)
+}
 
-			if err != nil {
-				log.Println("failed to http", err)
-				return
-			}
-			if rp.StatusCode != http.StatusOK {
-				log.Println("wrong status", rp.StatusCode)
-				return
-			}
-			defer func() {
-				_ = rp.Body.Close()
-			}()
-			var e error
-			c.Images[id], e = png.Decode(rp.Body)
-			if e != nil {
-				log.Println("failed to decode", err)
-			}
-		}()
+func (c *WebCanvas) DrawShape(id string, world, texture math.Box) {
+	if img, ok := c.jsImages[id]; !ok {
+		c.jsImages[id] = js.Global().Get("Image").New()
+		c.jsImages[id].Set("src", fmt.Sprintf("%s/%s", c.cfg.Server, id))
+	} else {
+		c.ImgCtx.Call("drawImage", img, texture.Corner.X, texture.Corner.Y, world.Size.X, world.Size.Y, world.Corner.X, world.Corner.Y, world.Size.X, world.Size.Y)
 	}
-	if c.Images[id] == nil {
-		return
-	}
-	wrl := world.(math.Box)
-	txr := texture.(math.Box)
-	wrl.Corner = wrl.Corner.Sub(c.Screen.Corner)
-	draw.Draw(c.Frame, wrl.ToImageRect(), c.Images[id], txr.Corner.ToPoint(), draw.Over)
+}
+
+func canvasColor(cl color.Color) (val string, opacity float64) {
+	r, g, b, a := cl.RGBA()
+	opacity = float64(a) / 256
+	val = fmt.Sprintf("#%02X%02X%02X", r/256, g/256, b/256)
+	return
 }
 
 func (c *WebCanvas) DrawColor(cl color.Color, world, texture math.Shape) {
+	clr, o := canvasColor(cl)
+	c.ImgCtx.Set("fillStyle", clr)
+	c.ImgCtx.Set("globalAlpha", o)
 	switch wrl := world.(type) {
 	case math.Box:
 		switch txr := texture.(type) {
 		case math.Box:
 			wrl.Corner = wrl.Corner.Sub(c.Screen.Corner)
-			draw.Draw(c.Frame, wrl.ToImageRect(), image.NewUniform(cl), txr.Corner.ToPoint(), draw.Over)
+			log.Println("HER")
+			c.ImgCtx.Call("fillRect", wrl.Corner.X, wrl.Corner.Y, wrl.Size.X, wrl.Size.Y)
 		case math.Sphere:
 
 		default:
@@ -186,8 +156,9 @@ func (c *WebCanvas) DrawColor(cl color.Color, world, texture math.Shape) {
 		case math.Box:
 			log.Panicln("not implemented, and probably would not", wrl, txr)
 		case math.Sphere:
-			circle := &circle{c: wrl, cl: cl}
-			draw.Draw(c.Frame, circle.Bounds(), circle, txr.Center.Sub(math.Vector{X: txr.R, Y: txr.R}).ToPoint(), draw.Over)
+			c.ImgCtx.Call("beginPath")
+			c.ImgCtx.Call("arc", wrl.Center.X, wrl.Center.Y, wrl.R, 0, 2*math2.Pi)
+			c.ImgCtx.Call("fill")
 		default:
 			log.Panicln("not implemented second type", txr)
 		}

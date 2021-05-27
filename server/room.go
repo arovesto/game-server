@@ -22,6 +22,7 @@ var (
 )
 
 const (
+	layers  = 10
 	Stopped = iota
 	Running
 )
@@ -60,6 +61,7 @@ type Room struct {
 	players     map[int]elements.Playable
 	movable     map[int]elements.Movable
 	collidable  map[int]elements.Collidable
+	drawOrder   []map[int]elements.Drawable
 	toDelete    map[int]struct{}
 	oneTickDiff map[int][]byte
 
@@ -79,6 +81,7 @@ func (s *Room) init(id int, tp string, elms []elements.Element) {
 	s.oneTickDiff = map[int][]byte{}
 	s.collidable = map[int]elements.Collidable{}
 	s.toDelete = map[int]struct{}{}
+	s.drawOrder = make([]map[int]elements.Drawable, layers)
 	s.ID = id
 	s.Type = tp
 	s.done = make(chan struct{})
@@ -153,9 +156,12 @@ func (s *Room) Update(delta time.Duration) {
 }
 
 func (s *Room) DeleteElement(id int) {
+	e := s.GetElement(id)
+
 	delete(s.movable, id)
 	delete(s.collidable, id)
 	delete(s.elements, id)
+	delete(s.drawOrder[getElementLayer(e)], id)
 }
 
 func (s *Room) processEvents() {
@@ -339,6 +345,7 @@ func (s *Room) ProcessEvent(e event.Event) error {
 	}
 }
 
+// TODO implement this better, add toTransfer map and transfer everyone together after update cycle, so no data races on already transferred
 func (s *Room) Transfer(id int, target elements.EventProcessor) error {
 	p, ok := s.clients[id]
 	if !ok {
@@ -381,8 +388,13 @@ func (s *Room) GetType() string {
 }
 
 func (s *Room) Draw(c canvas.Canvas) {
-	for _, e := range s.elements {
-		e.Draw(c)
+	for i := len(s.drawOrder) - 1; i >= 0; i-- {
+		if s.drawOrder[i] == nil {
+			continue
+		}
+		for _, el := range s.drawOrder[i] {
+			el.Draw(c)
+		}
 	}
 }
 
@@ -406,4 +418,22 @@ func (s *Room) NewElement(el elements.Element) {
 	if el.GetID() >= s.currentID {
 		s.currentID = el.GetID() + 1
 	}
+	if d, ok := el.(elements.Drawable); ok {
+		layer := getElementLayer(el)
+		if s.drawOrder[layer] == nil {
+			s.drawOrder[layer] = map[int]elements.Drawable{}
+		}
+		s.drawOrder[layer][el.GetID()] = d
+	}
+}
+
+func getElementLayer(e elements.Element) (layer int) {
+	l, ok := e.(elements.GetLayer)
+	if ok {
+		layer = l.GetLayer()
+	}
+	if layer >= layers {
+		layer = layers - 1
+	}
+	return
 }

@@ -119,5 +119,4 @@ func RunClient() {
 		room.Draw(c)
 		return false
 	})
-	r.Stop()
 }

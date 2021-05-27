@@ -2,6 +2,7 @@ package entities
 
 import (
 	"encoding/json"
+	"fmt"
 	"image/color"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/arovesto/gio/event"
 	"github.com/arovesto/gio/input"
 	"github.com/arovesto/gio/math"
+	"github.com/arovesto/gio/misc"
 )
 
 const SnakeType = 232323
@@ -27,9 +29,10 @@ type Snake struct {
 	Vel  math.Vector
 	Dead bool
 
-	I           PlayerInput
-	Lost        bool
-	LastCreated time.Time
+	I            PlayerInput
+	Lost         bool
+	LastCreated  time.Time
+	MenusCreated int
 }
 
 func (s *Snake) Draw(c canvas.Canvas) {
@@ -40,6 +43,7 @@ func (s *Snake) Draw(c canvas.Canvas) {
 			c.DrawColor(color.RGBA{R: 255, A: 255}, o, o)
 		}
 	}
+	c.DrawText(fmt.Sprintf("Создано %d менюшек", s.MenusCreated), s.Orbs[0].Center, "72px serif")
 }
 
 func (s *Snake) GetID() int {
@@ -60,7 +64,6 @@ func (s *Snake) SetState(bytes []byte) error {
 
 func (s *Snake) Input() ([]byte, error) {
 	s.I.Target = input.MousePosition
-	//o.I.Moving = input.MousePressed
 	s.I.Moving = true
 	s.I.GenNew = input.Pressed[input.KEY_SPACE]
 	return json.Marshal(s.I)
@@ -83,28 +86,35 @@ func (s *Snake) Collider() math.Shape {
 }
 
 func (s *Snake) Move(duration time.Duration, processor elements.EventProcessor) error {
-	playerOrb := s.Orbs[0]
+	//playerOrb := s.Orbs[0]
 
 	if s.Dead && !s.Lost {
 		s.Lost = true
 		return processor.ProcessEvent(event.Event{Type: "lose", From: s.GetID()})
 	}
-	if s.I.GenNew && time.Since(s.LastCreated) > time.Second {
+	if s.I.GenNew && time.Since(s.LastCreated) > time.Millisecond*500 {
 		s.LastCreated = time.Now()
 		s.I.GenNew = false
 
-		var target math.Vector
-		if len(s.Orbs) >= 2 {
-			prev := s.Orbs[len(s.Orbs)-1]
-			subPrev := s.Orbs[len(s.Orbs)-2]
-			target = prev.Center.Add(subPrev.Center.Sub(prev.Center).NormalizedTimes(-2*prev.R + dist))
-		} else {
-			target = playerOrb.Center.Add(math.Vector{X: playerOrb.R, Y: playerOrb.R}).Add(math.Vector{X: dist, Y: dist})
-			if s.Vel.Y != 0 && s.Vel.X != 0 {
-				target = playerOrb.Center.Add(s.Vel.NormalizedTimes(-2*playerOrb.R + dist))
-			}
-		}
-		s.Orbs = append(s.Orbs, math.Sphere{R: orbRadis, Center: target})
+		processor.NewElement(&elements.StaticBackground{
+			Where:     math.Box{Corner: math.Vector{X: 100, Y: 100}, Size: math.Vector{X: 1464, Y: 720}},
+			TextureID: "win.png",
+			ID:        misc.NewID(),
+		})
+		s.MenusCreated++
+
+		//var target math.Vector
+		//if len(s.Orbs) >= 2 {
+		//	prev := s.Orbs[len(s.Orbs)-1]
+		//	subPrev := s.Orbs[len(s.Orbs)-2]
+		//	target = prev.Center.Add(subPrev.Center.Sub(prev.Center).NormalizedTimes(-2*prev.R + dist))
+		//} else {
+		//	target = playerOrb.Center.Add(math.Vector{X: playerOrb.R, Y: playerOrb.R}).Add(math.Vector{X: dist, Y: dist})
+		//	if s.Vel.Y != 0 && s.Vel.X != 0 {
+		//		target = playerOrb.Center.Add(s.Vel.NormalizedTimes(-2*playerOrb.R + dist))
+		//	}
+		//}
+		//s.Orbs = append(s.Orbs, math.Sphere{R: orbRadis, Center: target})
 	}
 	if s.I.Moving {
 		s.Vel = math.Clamp(s.I.Target.Sub(s.Orbs[0].Center).Mul(playerMoveAcc), math.Vector{X: -playerMaxSpeed, Y: -playerMaxSpeed}, math.Vector{X: playerMaxSpeed, Y: playerMaxSpeed})

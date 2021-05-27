@@ -41,11 +41,18 @@ type EventProcessor interface {
 // TODO remove SetState, GetState, move it is to separate interface, use json-all by default
 // should be json + yaml marshalled to allow sending to web + storing in config files
 type Element interface {
-	Draw(c canvas.Canvas) // all actions to draw the object
-	GetID() int           // for cross element actions
-	GetType() int         // for cross element actions
+	GetID() int   // for cross element actions
+	GetType() int // for cross element actions
 	GetState() ([]byte, error)
 	SetState([]byte) error
+}
+
+type Drawable interface {
+	Draw(c canvas.Canvas) // all actions to draw the object
+}
+
+type GetLayer interface {
+	GetLayer() int
 }
 
 type Playable interface {

@@ -39,6 +39,17 @@ var winLobby = server.NewBasicRoom(0, "game-over-lobby", []elements.Element{
 func main() {
 	server.CustomRoomAction["lobby"] = func(r *server.Room) {
 		p := r.Players()
+		if len(p) == 1 {
+			room := server.NewBasicRoom(misc.NewID(), "snake", []elements.Element{
+				&entities.Snake{
+					Orbs: []math.Sphere{{Center: math.Vector{X: 200, Y: 200}, R: 50}},
+					ID:   10,
+				},
+			})
+			if err := r.Transfer(p[0], room); err != nil {
+				log.Println("failed to transfer guy 1 to new room", err)
+			}
+		}
 		if len(p) >= 2 {
 			room := server.NewBasicRoom(misc.NewID(), "snake", []elements.Element{
 				&entities.Snake{
@@ -59,13 +70,13 @@ func main() {
 		}
 	}
 	server.CustomRoomAction["snake"] = func(r *server.Room) {
-		st, ok := r.CustomState.(bool)
-		p := r.Players()
-		if len(p) == 1 && ok && st {
-			if err := r.Transfer(p[0], winLobby); err != nil {
-				log.Println("failed to transfer won player to win room")
-			}
-		}
+		//st, ok := r.CustomState.(bool)
+		//p := r.Players()
+		//if len(p) == 1 && ok && st {
+		//	if err := r.Transfer(p[0], winLobby); err != nil {
+		//		log.Println("failed to transfer won player to win room")
+		//	}
+		//}
 	}
 	server.EventsProcessors["snake"] = map[string]func(e event.Event, r *server.Room) error{
 		"lose": func(e event.Event, r *server.Room) error {

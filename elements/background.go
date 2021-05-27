@@ -32,3 +32,7 @@ func (s *StaticBackground) GetState() ([]byte, error) {
 func (s *StaticBackground) SetState(bytes []byte) error {
 	return json.Unmarshal(bytes, s)
 }
+
+func (s *StaticBackground) GetLayer() int {
+	return 1
+}
