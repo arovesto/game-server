@@ -18,6 +18,7 @@ type Controller struct {
 	ID               int
 	Level            int
 	SnakesLen        int
+	SnakesCnt        int
 	PlayersMaxHP     float64
 	SnakesHeadRadius float64
 	Arena            math.Box
@@ -89,9 +90,15 @@ func (c *Controller) Move(duration time.Duration, processor elements.EventProces
 			c.SnakesLen++
 		}
 		if c.Level%3 == 0 {
+			c.SnakesCnt++
+		}
+		if c.Level%3 == 0 {
 			c.SnakesHeadRadius += 5
 		}
-		snakes := c.Level * len(players)
+		snakes := c.SnakesCnt * len(c.Snakes)
+		if snakes <= 0 {
+			snakes = 1
+		}
 		if snakes > 10 {
 			snakes = 10
 		}
