@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"sync"
 	"time"
 
 	"nhooyr.io/websocket"
@@ -47,9 +48,10 @@ type RawElement struct {
 }
 
 type Room struct {
-	clients map[int]player
-	events  chan event.Event
-	done    chan struct{}
+	clientsLock sync.RWMutex
+	clients     map[int]player
+	events      chan event.Event
+	done        chan struct{}
 
 	State       int          `json:"state"`
 	ID          int          `json:"id"`
@@ -103,6 +105,8 @@ func (s *Room) GetElements() map[int]elements.Element {
 }
 
 func (s *Room) Players() (r []int) {
+	s.clientsLock.RLock()
+	defer s.clientsLock.RUnlock()
 	for id := range s.clients {
 		r = append(r, id)
 	}
@@ -191,6 +195,7 @@ func (s *Room) processEvents() {
 		if _, ok := s.toDelete[e.GetID()]; ok {
 			s.DeleteElement(e.GetID())
 			s.BroadcastEvent(event.Event{Type: "deleted", From: e.GetID()})
+			s.clientsLock.RLock()
 			if p, ok := s.clients[e.GetID()]; ok {
 				data, err := json.Marshal(event.Event{Type: "game-over", From: e.GetID()})
 				if err != nil {
@@ -200,6 +205,7 @@ func (s *Room) processEvents() {
 					log.Println("failed to send game over event", err)
 				}
 			}
+			s.clientsLock.RUnlock()
 		}
 		state, err := e.GetState()
 		if err != nil {
@@ -257,9 +263,11 @@ func (s *Room) Run(c *websocket.Conn) error {
 	}
 	ctx := context.Background()
 	assigned := map[int]struct{}{}
+	s.clientsLock.RLock()
 	for id, _ := range s.clients {
 		assigned[id] = struct{}{}
 	}
+	s.clientsLock.RUnlock()
 	me, err := PlayerChoiceFunctions[s.Type](s.players, assigned, s)
 	if err != nil {
 		// TODO Mange "Room Full" error appropriately (or not)
@@ -287,14 +295,20 @@ func (s *Room) Run(c *websocket.Conn) error {
 		return err
 	}
 	transfer := make(chan *Room, 1)
+	s.clientsLock.Lock()
 	s.clients[me] = player{
 		transfer: transfer,
 		c:        c,
 	}
+	s.clientsLock.Unlock()
 
 	// TODO handle "connection closed" appropriately
-	defer delete(s.clients, me)
-	defer s.DeleteElement(me)
+	defer func() {
+		s.clientsLock.Lock()
+		delete(s.clients, me)
+		s.clientsLock.Unlock()
+		s.DeleteElement(me)
+	}()
 
 	for {
 		_, data, err := c.Read(ctx)
@@ -307,7 +321,6 @@ func (s *Room) Run(c *websocket.Conn) error {
 		}
 		select {
 		case r := <-transfer:
-			delete(s.clients, me)
 			return r.Run(c)
 		case s.events <- ev:
 		default:
@@ -364,7 +377,9 @@ func (s *Room) ProcessEvent(e event.Event) error {
 
 // TODO implement this better, add toTransfer map and transfer everyone together after update cycle, so no data races on already transferred
 func (s *Room) Transfer(id int, target elements.EventProcessor) error {
+	s.clientsLock.RLock()
 	p, ok := s.clients[id]
+	s.clientsLock.RUnlock()
 	if !ok {
 		return EntityNotFound
 	}
@@ -385,6 +400,8 @@ func (s *Room) Transfer(id int, target elements.EventProcessor) error {
 }
 
 func (s *Room) BroadcastEvent(e event.Event) {
+	s.clientsLock.RLock()
+	defer s.clientsLock.RUnlock()
 	for _, p := range s.clients {
 		data, err := json.Marshal(e)
 		if err != nil {
