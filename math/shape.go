@@ -4,6 +4,7 @@ import (
 	"image"
 	"log"
 	"math"
+	"math/rand"
 )
 
 type Vector struct {
@@ -17,6 +18,13 @@ func (v Vector) ToPoint() image.Point {
 
 func (v Vector) Add(other Vector) Vector {
 	return Vector{v.X + other.X, v.Y + other.Y}
+}
+
+func (v Vector) Rotate(angle float64) Vector {
+	return Vector{
+		X: v.X*math.Cos(angle) - v.Y*math.Sin(angle),
+		Y: v.X*math.Sin(angle) + v.Y*math.Cos(angle),
+	}
 }
 
 func (v Vector) Mul(c float64) Vector {
@@ -62,6 +70,10 @@ func (b Box) Center() Vector {
 	return b.Corner.Add(b.Size.Mul(0.5))
 }
 
+func (b Box) IsInside(v Vector) bool {
+	return v.X >= b.Corner.X && v.X <= b.Corner.X+b.Size.X && v.Y >= b.Corner.Y && v.Y <= b.Corner.Y+b.Size.Y
+}
+
 func ClampF(val, min, max float64) float64 {
 	if val < min {
 		return min
@@ -81,6 +93,11 @@ type Sphere struct {
 	R      float64
 }
 
+type Ellipse struct {
+	Center Vector
+	Radius Vector
+}
+
 func (s Sphere) IsInside(v Vector) bool {
 	return v.Sub(s.Center).SquaredL() < s.R*s.R
 }
@@ -94,6 +111,18 @@ type BackOff struct {
 	TouchDown  bool
 
 	Collided bool
+}
+
+func CenterOf(s Shape) Vector {
+	switch sVal := s.(type) {
+	case Box:
+		return sVal.Center()
+	case Sphere:
+		return sVal.Center
+	default:
+		log.Panicln("not implemented CenterOf", sVal)
+		return Vector{}
+	}
 }
 
 type Shape interface{}
@@ -122,15 +151,21 @@ func Collide(a, b Shape) (r BackOff) {
 		case Box:
 			if BoxCollide(aVal, bVal) {
 				actions = []BackOff{
-					{TouchDown: true, Delta: Vector{Y: bVal.Corner.Y - aVal.Corner.Y - aVal.Size.Y}},
-					{TouchUp: true, Delta: Vector{Y: bVal.Corner.Y + bVal.Size.Y - aVal.Corner.Y}},
-					{TouchLeft: true, Delta: Vector{X: bVal.Corner.X + bVal.Size.X - aVal.Corner.X}},
-					{TouchRight: true, Delta: Vector{X: bVal.Corner.X - aVal.Corner.X - aVal.Size.X}},
+					{TouchDown: true, Delta: Vector{Y: bVal.Corner.Y - aVal.Corner.Y - aVal.Size.Y}, Collided: true},
+					{TouchUp: true, Delta: Vector{Y: bVal.Corner.Y + bVal.Size.Y - aVal.Corner.Y}, Collided: true},
+					{TouchLeft: true, Delta: Vector{X: bVal.Corner.X + bVal.Size.X - aVal.Corner.X}, Collided: true},
+					{TouchRight: true, Delta: Vector{X: bVal.Corner.X - aVal.Corner.X - aVal.Size.X}, Collided: true},
 				}
 			}
 		case Sphere:
 			if BoxSphereCollide(aVal, bVal) {
 				return BackOff{Collided: true} // TODO to implement true "Contact" point (more at BackOff)
+			}
+		case []Sphere:
+			for _, b := range bVal {
+				if BoxSphereCollide(aVal, b) {
+					return BackOff{Collided: true}
+				}
 			}
 		default:
 			log.Panicln("unknown second val", bVal)
@@ -199,4 +234,30 @@ func (b BackOff) Clamp(v Vector) Vector {
 		v.Y = 0
 	}
 	return v
+}
+
+func AngleOn(from, to Vector) float64 {
+	if to.X == from.X {
+		return 0
+	}
+	return math.Atan((to.Y - from.Y) / math.Abs(to.X-from.X))
+}
+
+func AngleBetween(from, to Vector) float64 {
+	return math.Atan2(from.X*to.Y-from.Y*to.X, from.X*to.X+from.Y*to.Y)
+}
+
+func Random(min, max int) int {
+	return rand.Intn(max-min) + min
+}
+
+func RandomF(min, max float64) float64 {
+	return min + rand.Float64()*(max-min)
+}
+
+func RandomInBox(b Box) Vector {
+	return Vector{
+		X: RandomF(b.Corner.X, b.Corner.X+b.Size.X),
+		Y: RandomF(b.Corner.Y, b.Corner.Y+b.Size.Y),
+	}
 }

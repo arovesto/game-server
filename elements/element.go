@@ -34,6 +34,9 @@ const (
 type EventProcessor interface {
 	ProcessEvent(e event.Event) error
 	Transfer(id int, r EventProcessor) error
+	GetElements() map[int]Element
+	GetElement(id int) Element
+	Players() (r []int)
 	NewElement(e Element)
 	NewID() int
 }
@@ -48,6 +51,7 @@ type Element interface {
 }
 
 type Drawable interface {
+	Element
 	Draw(c canvas.Canvas) // all actions to draw the object
 }
 
@@ -70,4 +74,8 @@ type Collidable interface {
 type Movable interface {
 	Element
 	Move(duration time.Duration, processor EventProcessor) error // all changes in object
+}
+
+type PreDraw interface {
+	PreDraw(c canvas.Canvas)
 }

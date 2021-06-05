@@ -115,6 +115,9 @@ func RunClient() {
 
 	r.Start(func(c *canvas.WebCanvas, d time.Duration) (done bool) {
 		c.Clear()
+		if p, ok := me.(elements.PreDraw); ok {
+			p.PreDraw(c)
+		}
 		room.Update(d)
 		room.Draw(c)
 		return false

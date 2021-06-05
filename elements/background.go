@@ -34,5 +34,5 @@ func (s *StaticBackground) SetState(bytes []byte) error {
 }
 
 func (s *StaticBackground) GetLayer() int {
-	return 1
+	return 10
 }

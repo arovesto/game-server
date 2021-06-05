@@ -26,6 +26,7 @@ type WebCanvas struct {
 
 	ImgCtx js.Value
 
+	Camera math.Box
 	Screen math.Box
 
 	cfg gio.Config
@@ -104,6 +105,7 @@ func (c *WebCanvas) Start(callback func(c *WebCanvas, duration time.Duration) bo
 }
 
 func (c *WebCanvas) Clear() {
+	c.Camera = math.Box{}
 	c.ImgCtx.Call("clearRect", 0, 0, c.Screen.Size.X, c.Screen.Size.Y)
 }
 
@@ -116,7 +118,18 @@ func (c *WebCanvas) DrawText(text string, where math.Vector, font string) {
 	if font != "" {
 		c.ImgCtx.Set("font", font)
 	}
-	c.ImgCtx.Call("fillText", text, where.X, where.Y)
+	c.ImgCtx.Call("fillText", text, where.X-c.Camera.Corner.X, where.Y-c.Camera.Corner.Y)
+}
+
+// TODO implement SIZE ability (to see only what in camera)
+func (c *WebCanvas) SetCamera(box math.Box) {
+	c.Camera = box
+}
+
+// TODO implement SIZE ability (to see only what in camera)
+func (c *WebCanvas) SetCameraCenter(v math.Vector) {
+	c.Camera = c.Screen
+	c.Camera.Corner = v.Sub(c.Camera.Size.Mul(0.5))
 }
 
 func (c *WebCanvas) DrawShape(id string, world, texture math.Box) {
@@ -124,7 +137,7 @@ func (c *WebCanvas) DrawShape(id string, world, texture math.Box) {
 		c.jsImages[id] = js.Global().Get("Image").New()
 		c.jsImages[id].Set("src", fmt.Sprintf("%s/%s", c.cfg.Server, id))
 	} else {
-		c.ImgCtx.Call("drawImage", img, texture.Corner.X, texture.Corner.Y, world.Size.X, world.Size.Y, world.Corner.X, world.Corner.Y, world.Size.X, world.Size.Y)
+		c.ImgCtx.Call("drawImage", img, texture.Corner.X, texture.Corner.Y, texture.Size.X, texture.Size.Y, world.Corner.X-c.Camera.Corner.X, world.Corner.Y-c.Camera.Corner.Y, world.Size.X, world.Size.Y)
 	}
 }
 
@@ -144,10 +157,8 @@ func (c *WebCanvas) DrawColor(cl color.Color, world, texture math.Shape) {
 		switch txr := texture.(type) {
 		case math.Box:
 			wrl.Corner = wrl.Corner.Sub(c.Screen.Corner)
-			log.Println("HER")
-			c.ImgCtx.Call("fillRect", wrl.Corner.X, wrl.Corner.Y, wrl.Size.X, wrl.Size.Y)
+			c.ImgCtx.Call("fillRect", wrl.Corner.X-c.Camera.Corner.X, wrl.Corner.Y-c.Camera.Corner.Y, wrl.Size.X, wrl.Size.Y)
 		case math.Sphere:
-
 		default:
 			log.Panicln("not implemented second type", txr)
 		}
@@ -157,11 +168,15 @@ func (c *WebCanvas) DrawColor(cl color.Color, world, texture math.Shape) {
 			log.Panicln("not implemented, and probably would not", wrl, txr)
 		case math.Sphere:
 			c.ImgCtx.Call("beginPath")
-			c.ImgCtx.Call("arc", wrl.Center.X, wrl.Center.Y, wrl.R, 0, 2*math2.Pi)
+			c.ImgCtx.Call("arc", wrl.Center.X-c.Camera.Corner.X, wrl.Center.Y-c.Camera.Corner.Y, wrl.R, 0, 2*math2.Pi)
 			c.ImgCtx.Call("fill")
 		default:
 			log.Panicln("not implemented second type", txr)
 		}
+	case math.Ellipse:
+		c.ImgCtx.Call("beginPath")
+		c.ImgCtx.Call("ellipse", wrl.Center.X-c.Camera.Corner.X, wrl.Center.Y-c.Camera.Corner.Y, wrl.Radius.X, wrl.Radius.Y, 0, 0, 2*math2.Pi)
+		c.ImgCtx.Call("fill")
 	default:
 		log.Panicln("not implemented type", wrl)
 	}
@@ -195,25 +210,4 @@ func (c *WebCanvas) openImage(p string) (i image.Image, e error) {
 
 	<-done
 	return
-}
-
-type circle struct {
-	c  math.Sphere
-	cl color.Color
-}
-
-func (c circle) ColorModel() color.Model {
-	return color.RGBAModel
-}
-
-func (c circle) Bounds() image.Rectangle {
-	return image.Rect(int(c.c.Center.X-c.c.R), int(c.c.Center.Y-c.c.R), int(c.c.Center.X+c.c.R+1), int(c.c.Center.Y+c.c.R+1))
-}
-
-func (c circle) At(x, y int) color.Color {
-	if c.c.IsInside(math.Vector{X: float64(x), Y: float64(y)}) {
-		return c.cl
-	} else {
-		return color.RGBA{A: 0}
-	}
 }

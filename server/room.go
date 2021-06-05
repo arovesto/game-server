@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	"nhooyr.io/websocket"
@@ -29,11 +30,11 @@ const (
 
 var readAtMostEvents = 100
 
+// TODO replace this with function field of a room, it is seams better
 var PlayerChoiceFunctions = map[string]func(playable map[int]elements.Playable, assigned map[int]struct{}, r *Room) (int, error){} // what element of room should be used on new connection
 
+// TODO replace this with local map in Room thing
 var EventsProcessors = map[string]map[string]func(e event.Event, r *Room) error{} // use this map as event blablabla
-
-var CustomRoomAction = map[string]func(r *Room){}
 
 type player struct {
 	transfer chan *Room
@@ -95,6 +96,10 @@ func (s *Room) init(id int, tp string, elms []elements.Element) {
 
 func (s *Room) GetElement(id int) elements.Element {
 	return s.elements[id]
+}
+
+func (s *Room) GetElements() map[int]elements.Element {
+	return s.elements
 }
 
 func (s *Room) Players() (r []int) {
@@ -161,6 +166,7 @@ func (s *Room) DeleteElement(id int) {
 	delete(s.movable, id)
 	delete(s.collidable, id)
 	delete(s.elements, id)
+	delete(s.players, id)
 	delete(s.drawOrder[getElementLayer(e)], id)
 }
 
@@ -196,9 +202,6 @@ func (s *Room) processEvents() {
 		if old, ok := s.oneTickDiff[e.GetID()]; ok && !bytes.Equal(old, state) {
 			s.BroadcastEvent(event.Event{Type: "update", From: e.GetID(), Payload: state})
 		}
-	}
-	if f, ok := CustomRoomAction[s.Type]; ok {
-		f(s)
 	}
 }
 
@@ -330,6 +333,13 @@ func (s *Room) ProcessEvent(e event.Event) error {
 		} else {
 			return fmt.Errorf("entity %d on %s: %w", e.From, e.Type, EntityNotFound)
 		}
+	case "add":
+		el := elements.GenElements[e.From]()
+		if err := el.SetState(e.Payload); err != nil {
+			return fmt.Errorf("failed to set el state: %w", err)
+		}
+		s.NewElement(el)
+		return nil
 	case "deleted":
 		s.DeleteElement(e.From)
 		return nil
@@ -392,8 +402,15 @@ func (s *Room) Draw(c canvas.Canvas) {
 		if s.drawOrder[i] == nil {
 			continue
 		}
+		var els []elements.Drawable
 		for _, el := range s.drawOrder[i] {
-			el.Draw(c)
+			els = append(els, el)
+		}
+		sort.Slice(els, func(i, j int) bool {
+			return els[i].GetID() > els[j].GetID()
+		})
+		for _, e := range els {
+			e.Draw(c)
 		}
 	}
 }
@@ -424,6 +441,13 @@ func (s *Room) NewElement(el elements.Element) {
 			s.drawOrder[layer] = map[int]elements.Drawable{}
 		}
 		s.drawOrder[layer][el.GetID()] = d
+	}
+	st, err := el.GetState()
+	if err != nil {
+		log.Println("failed to get element's state", err)
+	}
+	if s.State == Running {
+		s.BroadcastEvent(event.Event{Type: "add", From: el.GetType(), Payload: st})
 	}
 }
 

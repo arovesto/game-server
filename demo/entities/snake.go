@@ -2,48 +2,66 @@ package entities
 
 import (
 	"encoding/json"
-	"fmt"
 	"image/color"
 	"time"
 
 	"github.com/arovesto/gio/canvas"
 	"github.com/arovesto/gio/elements"
-	"github.com/arovesto/gio/event"
 	"github.com/arovesto/gio/input"
 	"github.com/arovesto/gio/math"
-	"github.com/arovesto/gio/misc"
 )
 
 const SnakeType = 232323
 
 const orbsGoBackConstant = 0.2
-const playerMoveAcc = 0.1
-const playerMaxSpeed = 10
-const dist = 10.0
-const orbRadis = 25
+const dist = 5.0
+const snakeDamageCoolDown = time.Second
 
 type Snake struct {
-	Orbs []math.Sphere
-	ID   int
+	Orbs           []math.Sphere
+	ID             int
+	TargetID       int
+	Layer          int
+	TargetPosition math.Vector
 
-	Vel  math.Vector
-	Dead bool
+	Vel      math.Vector
+	Dead     bool
+	MaxSpeed float64
+	DoDamage float64
+	MaxAngle float64
 
-	I            PlayerInput
-	Lost         bool
-	LastCreated  time.Time
-	MenusCreated int
+	DamageCoolDown time.Time
+	Damaged        bool
 }
 
 func (s *Snake) Draw(c canvas.Canvas) {
 	for i, o := range s.Orbs {
+		el := math.Ellipse{Radius: math.Vector{X: o.R * 0.5, Y: o.R / 6}, Center: math.Vector{X: o.Center.X, Y: o.Center.Y + o.R}}
+		c.DrawColor(color.RGBA{A: 10}, el, el)
 		if i == 0 {
-			c.DrawColor(color.RGBA{G: 255, A: 255}, o, o)
+			if s.Damaged {
+				c.DrawColor(color.RGBA{G: 200, R: 200, B: 200, A: 255}, o, o)
+			} else {
+				c.DrawColor(color.RGBA{G: 255, A: 255}, o, o)
+			}
+			eyeColor := color.RGBA{G: 250, R: 251, B: 255, A: 100}
+			eyeLitColor := color.RGBA{G: 230, R: 237, B: 255, A: 100}
+
+			eye := o.Center.Add(s.TargetPosition.Sub(o.Center).NormalizedTimes(o.R * 0.3))
+			c.DrawColor(eyeColor, math.Sphere{Center: eye, R: 8}, math.Sphere{Center: eye, R: 8})
+			c.DrawColor(eyeLitColor, math.Sphere{Center: eye, R: 3}, math.Sphere{Center: eye, R: 3})
+
+			eye = o.Center.Add(s.TargetPosition.Sub(o.Center).NormalizedTimes(o.R * 0.8))
+			c.DrawColor(eyeColor, math.Sphere{Center: eye, R: 8}, math.Sphere{Center: eye, R: 8})
+			c.DrawColor(eyeLitColor, math.Sphere{Center: eye, R: 3}, math.Sphere{Center: eye, R: 3})
 		} else {
-			c.DrawColor(color.RGBA{R: 255, A: 255}, o, o)
+			if s.Damaged {
+				c.DrawColor(color.RGBA{G: 200, R: 200, B: 200, A: 255}, o, o)
+			} else {
+				c.DrawColor(color.RGBA{R: 255, A: 255}, o, o)
+			}
 		}
 	}
-	c.DrawText(fmt.Sprintf("Создано %d менюшек", s.MenusCreated), s.Orbs[0].Center, "72px serif")
 }
 
 func (s *Snake) GetID() int {
@@ -62,22 +80,7 @@ func (s *Snake) SetState(bytes []byte) error {
 	return json.Unmarshal(bytes, s)
 }
 
-func (s *Snake) Input() ([]byte, error) {
-	s.I.Target = input.MousePosition
-	s.I.Moving = true
-	s.I.GenNew = input.Pressed[input.KEY_SPACE]
-	return json.Marshal(s.I)
-}
-
-func (s *Snake) SetInput(bytes []byte) error {
-	return json.Unmarshal(bytes, &s.I)
-}
-
 func (s *Snake) Collide(other elements.Collidable) error {
-	info := math.Collide(s.Orbs[0], other.Collider())
-	if info.Collided {
-		s.Dead = true
-	}
 	return nil
 }
 
@@ -86,56 +89,67 @@ func (s *Snake) Collider() math.Shape {
 }
 
 func (s *Snake) Move(duration time.Duration, processor elements.EventProcessor) error {
-	//playerOrb := s.Orbs[0]
-
-	if s.Dead && !s.Lost {
-		s.Lost = true
-		return processor.ProcessEvent(event.Event{Type: "lose", From: s.GetID()})
+	if time.Since(s.DamageCoolDown) > snakeDamageCoolDown && !s.Dead {
+		s.Damaged = false
 	}
-	if s.I.GenNew && time.Since(s.LastCreated) > time.Millisecond*500 {
-		s.LastCreated = time.Now()
-		s.I.GenNew = false
 
-		processor.NewElement(&elements.StaticBackground{
-			Where:     math.Box{Corner: math.Vector{X: 100, Y: 100}, Size: math.Vector{X: 1464, Y: 720}},
-			TextureID: "win.png",
-			ID:        misc.NewID(),
-		})
-		s.MenusCreated++
-
-		//var target math.Vector
-		//if len(s.Orbs) >= 2 {
-		//	prev := s.Orbs[len(s.Orbs)-1]
-		//	subPrev := s.Orbs[len(s.Orbs)-2]
-		//	target = prev.Center.Add(subPrev.Center.Sub(prev.Center).NormalizedTimes(-2*prev.R + dist))
-		//} else {
-		//	target = playerOrb.Center.Add(math.Vector{X: playerOrb.R, Y: playerOrb.R}).Add(math.Vector{X: dist, Y: dist})
-		//	if s.Vel.Y != 0 && s.Vel.X != 0 {
-		//		target = playerOrb.Center.Add(s.Vel.NormalizedTimes(-2*playerOrb.R + dist))
-		//	}
-		//}
-		//s.Orbs = append(s.Orbs, math.Sphere{R: orbRadis, Center: target})
+	if s.Dead {
+		return nil
 	}
-	if s.I.Moving {
-		s.Vel = math.Clamp(s.I.Target.Sub(s.Orbs[0].Center).Mul(playerMoveAcc), math.Vector{X: -playerMaxSpeed, Y: -playerMaxSpeed}, math.Vector{X: playerMaxSpeed, Y: playerMaxSpeed})
-		s.Orbs[0].Center = s.Orbs[0].Center.Add(s.Vel)
-		for i, o := range s.Orbs {
-			if i != 0 {
-				target := s.Orbs[i-1]
-				target.Center = target.Center.Sub(target.Center.Sub(o.Center).NormalizedTimes(target.R + o.R + dist))
-				s.Orbs[i].Center = o.Center.Add(target.Center.Sub(o.Center).Mul(orbsGoBackConstant))
-			}
+
+	t := processor.GetElement(s.TargetID)
+	if t == nil || t.GetID() == s.ID {
+		if len(processor.Players()) == 0 {
+			return nil
 		}
+		s.TargetID = processor.Players()[0]
+		return nil
+	}
+	c, ok := t.(elements.Collidable)
+	if !ok {
+		if len(processor.Players()) == 0 {
+			return nil
+		}
+		s.TargetID = processor.Players()[0]
+		return nil
+	}
+	s.TargetPosition = math.CenterOf(c.Collider())
+	desiredVelocity := s.TargetPosition.Sub(s.Orbs[0].Center).NormalizedTimes(s.MaxSpeed)
+	if s.Vel.X == 0 && s.Vel.Y == 0 {
+		s.Vel = desiredVelocity
 	} else {
-		s.Vel.X, s.Vel.Y = 0, 0
+		s.Vel = s.Vel.Rotate(math.ClampF(math.AngleBetween(s.Vel, desiredVelocity), -s.MaxAngle, s.MaxAngle))
+	}
+	s.Orbs[0].Center = s.Orbs[0].Center.Add(s.Vel)
+	for i, o := range s.Orbs {
+		if i != 0 {
+			target := s.Orbs[i-1]
+			target.Center = target.Center.Sub(target.Center.Sub(o.Center).NormalizedTimes(target.R + o.R + dist))
+			s.Orbs[i].Center = o.Center.Add(target.Center.Sub(o.Center).Mul(orbsGoBackConstant))
+		}
 	}
 	return nil
 }
 
-type PlayerInput struct {
-	Target math.Vector
-	GenNew bool
-	Moving bool
+func (s *Snake) GetLayer() int {
+	return s.Layer
+}
+
+func (s *Snake) IncreaseLength() {
+	last := s.Orbs[len(s.Orbs)-1]
+	s.Orbs = append(s.Orbs, math.Sphere{R: last.R, Center: last.Center.Add(s.Vel.NormalizedTimes(-(last.R*2 + dist)))})
+}
+
+func (s *Snake) Damage() {
+	if time.Since(s.DamageCoolDown) > snakeDamageCoolDown {
+		s.DamageCoolDown = time.Now()
+		s.Damaged = true
+		if len(s.Orbs) == 1 {
+			s.Dead = true
+		} else {
+			s.Orbs = s.Orbs[:len(s.Orbs)-1]
+		}
+	}
 }
 
 const GameOverPlayerType = 123
