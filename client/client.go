@@ -53,6 +53,7 @@ func RunClient() {
 				log.Println("failed to set room state", err)
 				room = server.Room{}
 			}
+			room.State = server.Web
 			me = nil // room changed so player is to
 		case "assign":
 			if room.Type == "" {

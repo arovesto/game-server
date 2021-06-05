@@ -27,6 +27,7 @@ const (
 	layers  = 10
 	Stopped = iota
 	Running
+	Web
 )
 
 var readAtMostEvents = 100
@@ -53,7 +54,7 @@ type Room struct {
 	events      chan event.Event
 	done        chan struct{}
 
-	State       int          `json:"state"`
+	State       int          `json:"-"`
 	ID          int          `json:"id"`
 	Type        string       `json:"type"`
 	RawElements []RawElement `json:"elements"`
@@ -92,7 +93,7 @@ func (s *Room) init(id int, tp string, elms []elements.Element) {
 	s.clients = map[int]player{}
 
 	for _, el := range elms {
-		s.NewElement(el)
+		s.newTrueElement(el)
 	}
 }
 
@@ -105,9 +106,7 @@ func (s *Room) GetElements() map[int]elements.Element {
 }
 
 func (s *Room) Players() (r []int) {
-	s.clientsLock.RLock()
-	defer s.clientsLock.RUnlock()
-	for id := range s.clients {
+	for id := range s.players {
 		r = append(r, id)
 	}
 	return
@@ -358,7 +357,7 @@ func (s *Room) ProcessEvent(e event.Event) error {
 		if err := el.SetState(e.Payload); err != nil {
 			return fmt.Errorf("failed to set el state: %w", err)
 		}
-		s.NewElement(el)
+		s.newTrueElement(el)
 		return nil
 	case "deleted":
 		s.DeleteElement(e.From)
@@ -445,7 +444,7 @@ func (s *Room) NewID() int {
 	return c
 }
 
-func (s *Room) NewElement(el elements.Element) {
+func (s *Room) newTrueElement(el elements.Element) {
 	s.elements[el.GetID()] = el
 	if p, ok := el.(elements.Playable); ok {
 		s.players[el.GetID()] = p
@@ -473,6 +472,13 @@ func (s *Room) NewElement(el elements.Element) {
 	if s.State == Running {
 		s.BroadcastEvent(event.Event{Type: "add", From: el.GetType(), Payload: st})
 	}
+}
+
+func (s *Room) NewElement(el elements.Element) {
+	if s.State == Web {
+		return
+	}
+	s.newTrueElement(el)
 }
 
 func getElementLayer(e elements.Element) (layer int) {

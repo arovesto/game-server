@@ -11,6 +11,7 @@ import (
 
 const ControllerType = 11112
 
+const helpDuration = time.Second * 10
 const maxLevel = 5
 
 type Controller struct {
@@ -21,6 +22,7 @@ type Controller struct {
 	SnakesHeadRadius float64
 	Arena            math.Box
 	Snakes           map[int]struct{}
+	HelpCoolDown     time.Time
 }
 
 func NewController(id int, arena math.Box) *Controller {
@@ -101,10 +103,23 @@ func (c *Controller) Move(duration time.Duration, processor elements.EventProces
 				Orbs:     genOrbs(c.Arena, math.Random(c.SnakesLen-2, c.SnakesLen+2), c.SnakesHeadRadius),
 				ID:       id,
 				MaxSpeed: spd,
-				MaxAngle: 0.05 * math.ClampF(float64(c.Level)/3, 1, 5),
+				MaxAngle: 0.05 * math.ClampF(float64(c.Level)/3, 1, 3),
 				DoDamage: math.ClampF(math.RandomF(float64(c.SnakesLen)/2, math.ClampF(spd/5, float64(c.SnakesLen)/2, 3)), 0.5, 3),
 			})
 			c.Snakes[id] = struct{}{}
+		}
+	}
+	for _, i := range players {
+		el := processor.GetElement(i)
+		if el != nil {
+			p, ok := el.(*Guy)
+			if ok && p.HP < 5 && time.Since(c.HelpCoolDown) > helpDuration {
+				c.HelpCoolDown = time.Now()
+				processor.NewElement(&Apple{
+					ID:  processor.NewID(),
+					Pos: math.Sphere{R: 30, Center: math.RandomInBox(math.Box{Corner: p.Position.Corner.Sub(math.Vector{X: 500, Y: 500}), Size: math.Vector{X: 1000, Y: 1000}})},
+				})
+			}
 		}
 	}
 	return nil

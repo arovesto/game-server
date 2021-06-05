@@ -80,14 +80,14 @@ func NewGuy(id int) *Guy {
 func (g *Guy) Collide(other elements.Collidable) error {
 	t, ok := other.(*Snake)
 	if !ok {
-		if _, ok := other.(*Trigger); ok {
-			return nil
-		}
-		if _, ok := other.(*Guy); ok {
-			return nil
-		}
-		info := math.Collide(g.Collider(), other.Collider())
-		g.Position.Corner = g.Position.Corner.Add(info.Delta)
+		//if _, ok := other.(*Trigger); ok {
+		//	return nil
+		//}
+		//if _, ok := other.(*Guy); ok {
+		//	return nil
+		//}
+		//info := math.Collide(g.Collider(), other.Collider())
+		//g.Position.Corner = g.Position.Corner.Add(info.Delta)
 		return nil
 	}
 	if t.Dead {

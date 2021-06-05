@@ -7,6 +7,7 @@ import (
 
 	"github.com/arovesto/gio/canvas"
 	"github.com/arovesto/gio/elements"
+	"github.com/arovesto/gio/event"
 	"github.com/arovesto/gio/input"
 	"github.com/arovesto/gio/math"
 )
@@ -179,11 +180,67 @@ func (g *GameOverPlayer) GetType() int {
 	return GameOverPlayerType
 }
 
+const AppleType = 23434
+
+type Apple struct {
+	ID   int
+	Pos  math.Sphere
+	Done bool
+}
+
+func (a *Apple) GetLayer() int {
+	return 2
+}
+
+func (a *Apple) Draw(c canvas.Canvas) {
+	r := math.Sphere{Center: a.Pos.Center, R: a.Pos.R + 5}
+	c.DrawColor(color.RGBA{R: 255, G: 255, B: 255, A: 100}, r, r)
+	c.DrawColor(color.RGBA{R: 255, G: 255, A: 255}, a.Pos, a.Pos)
+}
+
+func (a *Apple) GetID() int {
+	return a.ID
+}
+
+func (a *Apple) GetType() int {
+	return AppleType
+}
+
+func (a *Apple) GetState() ([]byte, error) {
+	return json.Marshal(a)
+}
+
+func (a *Apple) SetState(bytes []byte) error {
+	return json.Unmarshal(bytes, &a)
+}
+
+func (a *Apple) Collide(other elements.Collidable) error {
+	if p, ok := other.(*Guy); ok && math.Collide(a.Pos, other.Collider()).Collided {
+		p.HP += 5
+		a.Done = true
+	}
+	return nil
+}
+
+func (a *Apple) Move(d time.Duration, p elements.EventProcessor) error {
+	if a.Done {
+		return p.ProcessEvent(event.Event{Type: "delete", From: a.ID})
+	}
+	return nil
+}
+
+func (a *Apple) Collider() math.Shape {
+	return a.Pos
+}
+
 func init() {
 	elements.GenElements[SnakeType] = func() elements.Element {
 		return &Snake{}
 	}
 	elements.GenElements[GameOverPlayerType] = func() elements.Element {
 		return &GameOverPlayer{}
+	}
+	elements.GenElements[AppleType] = func() elements.Element {
+		return &Apple{}
 	}
 }
