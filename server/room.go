@@ -286,6 +286,7 @@ func (s *Room) Run(c *websocket.Conn) error {
 		c:        c,
 	}
 	defer delete(s.clients, me)
+	defer s.DeleteElement(me)
 
 	// TODO handle "connection closed" appropriately
 
