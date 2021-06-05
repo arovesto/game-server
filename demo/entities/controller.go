@@ -11,7 +11,7 @@ import (
 
 const ControllerType = 11112
 
-const maxLevel = 2
+const maxLevel = 5
 
 type Controller struct {
 	ID               int
@@ -94,7 +94,7 @@ func (c *Controller) Move(duration time.Duration, processor elements.EventProces
 			snakes = 10
 		}
 		for i := 0; i < snakes; i++ {
-			spd := math.RandomF(float64(c.SnakesLen*2), c.SnakesHeadRadius)
+			spd := math.ClampF(math.RandomF(float64(c.SnakesLen*2), c.SnakesHeadRadius), 5, 20)
 			id := processor.NewID()
 			processor.NewElement(&Snake{
 				Layer:    1,
