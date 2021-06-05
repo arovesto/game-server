@@ -162,12 +162,18 @@ func (s *Room) Update(delta time.Duration) {
 
 func (s *Room) DeleteElement(id int) {
 	e := s.GetElement(id)
+	if e == nil {
+		return
+	}
 
 	delete(s.movable, id)
 	delete(s.collidable, id)
 	delete(s.elements, id)
 	delete(s.players, id)
 	delete(s.drawOrder[getElementLayer(e)], id)
+	if s.State == Running {
+		s.BroadcastEvent(event.Event{Type: "deleted", From: id})
+	}
 }
 
 func (s *Room) processEvents() {
@@ -285,10 +291,10 @@ func (s *Room) Run(c *websocket.Conn) error {
 		transfer: transfer,
 		c:        c,
 	}
-	defer delete(s.clients, me)
-	defer s.DeleteElement(me)
 
 	// TODO handle "connection closed" appropriately
+	defer delete(s.clients, me)
+	defer s.DeleteElement(me)
 
 	for {
 		_, data, err := c.Read(ctx)
