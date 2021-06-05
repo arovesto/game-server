@@ -96,7 +96,7 @@ func (c *Controller) Move(duration time.Duration, processor elements.EventProces
 		if c.Level%3 == 0 {
 			c.SnakesHeadRadius += 5
 		}
-		snakes := c.SnakesCnt * len(c.Snakes)
+		snakes := c.SnakesCnt * len(players)
 		if snakes <= 0 {
 			snakes = 1
 		}
