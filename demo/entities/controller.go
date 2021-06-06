@@ -30,7 +30,6 @@ func NewController(id int, arena math.Box) *Controller {
 	return &Controller{
 		ID:               id,
 		SnakesLen:        3,
-                SnakesCnt:        1,
 		PlayersMaxHP:     10,
 		SnakesHeadRadius: 40,
 		Arena:            arena,
