@@ -90,7 +90,7 @@ func (c *Controller) Move(duration time.Duration, processor elements.EventProces
 		if c.Level%2 == 0 {
 			c.SnakesLen++
 		}
-		if c.Level%4 == 0 {
+		if c.Level%5 == 0 {
 			c.SnakesCnt++
 		}
 		if c.Level%3 == 0 {
