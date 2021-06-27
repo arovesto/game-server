@@ -9,12 +9,17 @@ import (
 
 type StaticBackground struct {
 	Where     math.Box
+	Texture   math.Box
 	TextureID string
 	ID        int
+	Layer     int
 }
 
 func (s *StaticBackground) Draw(c canvas.Canvas) {
-	c.DrawShape(s.TextureID, s.Where, math.Box{Size: s.Where.Size})
+	if s.Texture.Size.Abs() == 0 {
+		s.Texture = math.Box{Size: s.Where.Size}
+	}
+	c.DrawShape(s.TextureID, s.Where, s.Texture)
 }
 
 func (s *StaticBackground) GetID() int {
@@ -34,5 +39,8 @@ func (s *StaticBackground) SetState(bytes []byte) error {
 }
 
 func (s *StaticBackground) GetLayer() int {
+	if s.Layer != 0 {
+		return s.Layer
+	}
 	return 10
 }

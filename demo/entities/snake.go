@@ -189,7 +189,7 @@ type Apple struct {
 }
 
 func (a *Apple) GetLayer() int {
-	return 2
+	return 6
 }
 
 func (a *Apple) Draw(c canvas.Canvas) {

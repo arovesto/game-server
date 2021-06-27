@@ -25,13 +25,14 @@ type Trigger struct {
 }
 
 func (t *Trigger) GetLayer() int {
-	return 5
+	return 7
 }
 
 func (t *Trigger) Draw(c canvas.Canvas) {
-	c.DrawColor(color.RGBA{R: 209, G: 187, B: 19, A: 255}, t.Gather, t.Gather)
-	c.DrawColor(color.RGBA{R: 255, A: 255}, t.Start, t.Start)
-	c.DrawText("Нажми красную кнопку чтоб начать", t.Gather.Corner, "32px serif")
+	c.DrawColor(color.RGBA{R: 200, G: 224, B: 110, A: 100}, t.Gather, t.Gather)
+	c.DrawColor(color.RGBA{A: 255}, t.Start, t.Start)
+	c.DrawText("Зайди в пещеру чтобы начать.", t.Gather.Corner, "32px serif")
+	c.DrawText("Кто стоит на входе пойдет следом", t.Gather.Corner.Add(math.Vector{Y: 40}), "32px serif")
 }
 
 func (t *Trigger) Collide(other elements.Collidable) error {
@@ -73,12 +74,34 @@ func (t *Trigger) Move(duration time.Duration, processor elements.EventProcessor
 		t.Starting = false
 
 		room := server.NewBasicRoom(misc.NewID(), "snake", []elements.Element{
-			NewController(0, math.Box{Corner: math.Vector{X: 100, Y: 100}, Size: math.Vector{X: 3000, Y: 3000}}),
+			NewController(0, math.Box{Size: math.Vector{X: 256 * 15, Y: 144 * 15}}),
+			&elements.StaticBackground{
+				Where:     math.Box{Size: math.Vector{X: 256 * 15, Y: 144 * 15}},
+				Texture:   math.Box{Size: math.Vector{X: 1280, Y: 720}},
+				TextureID: "game-background.png",
+				ID:        1,
+			},
+			&elements.Wall{
+				ID:    2,
+				Where: math.Box{Corner: math.Vector{X: 43 * 15, Y: 42 * 15}, Size: math.Vector{X: 10, Y: 60 * 15}},
+			},
+			&elements.Wall{
+				ID:    3,
+				Where: math.Box{Corner: math.Vector{X: 176 * 15, Y: 42 * 15}, Size: math.Vector{X: 10, Y: 60 * 15}},
+			},
+			&elements.Wall{
+				ID:    4,
+				Where: math.Box{Corner: math.Vector{X: 43 * 15, Y: 42 * 15}, Size: math.Vector{X: 130 * 15, Y: 10}},
+			},
+			&elements.Wall{
+				ID:    5,
+				Where: math.Box{Corner: math.Vector{X: 43 * 15, Y: 102 * 15}, Size: math.Vector{X: 130 * 15, Y: 10}},
+			},
 		})
 
 		for pl := range t.Ready {
 			id := room.NewID()
-			room.NewElement(NewGuy(id))
+			room.NewElement(NewGuy(id, math.Vector{X: 1500, Y: 1000}))
 			if err := processor.Transfer(pl, room); err != nil {
 				log.Println("failed to transfer guy", pl, "to new room", err)
 			}

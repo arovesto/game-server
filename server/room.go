@@ -482,6 +482,7 @@ func (s *Room) NewElement(el elements.Element) {
 }
 
 func getElementLayer(e elements.Element) (layer int) {
+	layer = 5
 	l, ok := e.(elements.GetLayer)
 	if ok {
 		layer = l.GetLayer()

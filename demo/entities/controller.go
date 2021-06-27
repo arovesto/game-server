@@ -30,7 +30,7 @@ func NewController(id int, arena math.Box) *Controller {
 	return &Controller{
 		ID:               id,
 		SnakesLen:        3,
-                SnakesCnt:        1,
+		SnakesCnt:        1,
 		PlayersMaxHP:     10,
 		SnakesHeadRadius: 40,
 		Arena:            arena,
@@ -107,7 +107,7 @@ func (c *Controller) Move(duration time.Duration, processor elements.EventProces
 			spd := math.ClampF(math.RandomF(float64(c.SnakesLen*2), c.SnakesHeadRadius), 5, 20)
 			id := processor.NewID()
 			processor.NewElement(&Snake{
-				Layer:    1,
+				Layer:    7,
 				Orbs:     genOrbs(c.Arena, math.Random(c.SnakesLen-2, c.SnakesLen+2), c.SnakesHeadRadius),
 				ID:       id,
 				MaxSpeed: spd,

@@ -13,15 +13,46 @@ import (
 // TODO add walls
 var lobby = server.NewBasicRoom(0, "lobby", []elements.Element{
 	&elements.StaticBackground{
-		Where:     math.Box{Corner: math.Vector{X: 100, Y: 100}, Size: math.Vector{X: 1464, Y: 720}},
+		Where:     math.Box{Size: math.Vector{X: 256 * 15, Y: 144 * 15}},
+		Texture:   math.Box{Size: math.Vector{X: 1280, Y: 720}},
 		TextureID: "lobby.png",
 		ID:        0,
 	},
 	&entities.Trigger{
 		ID:     1,
-		Gather: math.Box{Corner: math.Vector{X: 1000, Y: 1000}, Size: math.Vector{X: 500, Y: 500}},
-		Start:  math.Box{Corner: math.Vector{X: 1000, Y: 1000}, Size: math.Vector{X: 200, Y: 200}},
+		Gather: math.Box{Corner: math.Vector{X: 900, Y: 800}, Size: math.Vector{X: 500, Y: 500}},
+		Start:  math.Box{Corner: math.Vector{X: 900, Y: 950}, Size: math.Vector{X: 200, Y: 200}},
 		Ready:  map[int]struct{}{},
+	},
+	&elements.Wall{
+		ID:    2,
+		Where: math.Box{Corner: math.Vector{X: 43 * 15, Y: 42 * 15}, Size: math.Vector{X: 10, Y: 60 * 15}},
+	},
+	&elements.Wall{
+		ID:    3,
+		Where: math.Box{Corner: math.Vector{X: 176 * 15, Y: 42 * 15}, Size: math.Vector{X: 10, Y: 60 * 15}},
+	},
+	&elements.Wall{
+		ID:    4,
+		Where: math.Box{Corner: math.Vector{X: 43 * 15, Y: 42 * 15}, Size: math.Vector{X: 130 * 15, Y: 10}},
+	},
+	&elements.Wall{
+		ID:    5,
+		Where: math.Box{Corner: math.Vector{X: 43 * 15, Y: 102 * 15}, Size: math.Vector{X: 130 * 15, Y: 10}},
+	},
+	&elements.StaticBackground{
+		Where:     math.Box{Corner: math.Vector{X: 1800, Y: 1100}, Size: math.Vector{X: 256 * 2, Y: 144 * 2}},
+		Texture:   math.Box{Size: math.Vector{X: 1280, Y: 720}},
+		TextureID: "palm.png",
+		ID:        6,
+		Layer:     4,
+	},
+	&elements.StaticBackground{
+		Where:     math.Box{Corner: math.Vector{X: 1800, Y: 1100}, Size: math.Vector{X: 256 * 2, Y: 144 * 2}},
+		Texture:   math.Box{Size: math.Vector{X: 1280, Y: 720}},
+		TextureID: "palm-shadow.png",
+		ID:        7,
+		Layer:     6,
 	},
 })
 
@@ -60,7 +91,7 @@ func main() {
 	}
 	server.PlayerChoiceFunctions["lobby"] = func(playable map[int]elements.Playable, assigned map[int]struct{}, r *server.Room) (int, error) {
 		id := r.NewID()
-		r.NewElement(entities.NewGuy(id))
+		r.NewElement(entities.NewGuy(id, math.Vector{X: 1500, Y: 1000}))
 		return id, nil
 	}
 	server.PlayerChoiceFunctions["game-over-lobby"] = func(playable map[int]elements.Playable, assigned map[int]struct{}, r *server.Room) (int, error) {

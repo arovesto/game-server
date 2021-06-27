@@ -17,11 +17,12 @@ import (
 	"github.com/arovesto/gio/canvas"
 	"github.com/arovesto/gio/elements"
 	"github.com/arovesto/gio/event"
+	"github.com/arovesto/gio/input"
 	"github.com/arovesto/gio/server"
 )
 
-func RunClient() {
-	r := canvas.NewCanvas(gio.Config{Server: "/static/assets", FPSCap: 30})
+func RunClient(fps int, assetsPath string) {
+	r := canvas.NewCanvas(gio.Config{Server: assetsPath, FPSCap: fps})
 	ctx := context.Background()
 
 	conn, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://%s/socket", js.Global().Get("location").Get("host").String()), nil)
@@ -49,6 +50,7 @@ func RunClient() {
 		}
 		switch e.Type {
 		case "room":
+			input.ResetPressed()
 			if err = room.SetState(e.Payload); err != nil {
 				log.Println("failed to set room state", err)
 				room = server.Room{}
@@ -71,7 +73,7 @@ func RunClient() {
 			}
 		case "game-over":
 			me = nil
-			log.Println("GAME OVER, LOL)))")
+			log.Println("Game exited")
 			// TODO think something better (maybe game should have something custom for that matter)
 			os.Exit(0)
 		default:
@@ -92,16 +94,16 @@ func RunClient() {
 
 	js.Global().Call("setInterval", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		if me != nil {
-			input, err := me.Input()
+			i, err := me.Input()
 			if err != nil {
 				log.Println("failed to get player input", err)
 			}
-			if err := me.SetInput(input); err != nil {
+			if err := me.SetInput(i); err != nil {
 				log.Println("failed to set input", err)
 			}
 			eventRaw, err := json.Marshal(event.Event{
 				Type:    "input",
-				Payload: input,
+				Payload: i,
 				From:    me.GetID(),
 			})
 			if err != nil {

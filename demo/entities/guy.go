@@ -64,14 +64,14 @@ type Guy struct {
 	I GuyInput
 }
 
-func NewGuy(id int) *Guy {
+func NewGuy(id int, pos math.Vector) *Guy {
 	return &Guy{
 		ID:                id,
 		TextureID:         "guy.png",
 		SwordTextureID:    "sword.png",
 		SwordTextureShape: math.Box{Size: math.Vector{X: 32, Y: 32}},
 		SwordPosition:     math.Box{Size: math.Vector{X: 64, Y: 64}},
-		Position:          math.Box{Size: math.Vector{X: 128, Y: 128}},
+		Position:          math.Box{Size: math.Vector{X: 128, Y: 128}, Corner: pos},
 		TextureShape:      math.Box{Size: math.Vector{X: 64, Y: 64}},
 		HP:                10,
 	}
@@ -80,8 +80,10 @@ func NewGuy(id int) *Guy {
 func (g *Guy) Collide(other elements.Collidable) error {
 	t, ok := other.(*Snake)
 	if !ok {
-		//info := math.Collide(g.Collider(), other.Collider())
-		//g.Position.Corner = g.Position.Corner.Add(info.Delta)
+		if _, ok := other.(*elements.Wall); ok {
+			info := math.Collide(g.Position, other.Collider())
+			g.Position.Corner = g.Position.Corner.Add(info.Delta)
+		}
 		return nil
 	}
 	if t.Dead {

@@ -6,5 +6,5 @@ import (
 )
 
 func main() {
-	client.RunClient()
+	client.RunClient(60, "/static/assets")
 }

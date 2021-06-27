@@ -30,7 +30,9 @@ func (s *Wall) Playable() bool {
 }
 
 func (s *Wall) Draw(c canvas.Canvas) {
-	c.DrawColor(color.RGBAModel.Convert(color.Black), s.Where, math.Box{Size: s.Where.Size})
+	if s.Texture != "" {
+		c.DrawColor(color.RGBAModel.Convert(color.Black), s.Where, math.Box{Size: s.Where.Size})
+	}
 }
 
 func (s *Wall) Move(duration time.Duration, processor EventProcessor) error {
